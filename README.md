@@ -28,6 +28,7 @@ Para trabajar con los URDF y algunos scripts, también se requiere instalar MuJo
 
 ## 2. Estructura del repositorio
 
+```text
 unitree_brick_construction/
 ├─ configs/                 # Archivos de configuración opcionales para pruebas específicas.
 ├─ data/
@@ -40,16 +41,17 @@ unitree_brick_construction/
 ├─ simulators/              # Recursos de simulación (MuJoCo, etc.).
 ├─ src/
 │  └─ aura_g1/
-│     ├─ controllers/       # Controladores de alto nivel (por ejemplo, rutina_ladrillos.py).
+│     ├─ controllers/       # Controladores de alto nivel (por ejemplo, `rutina_ladrillos.py`).
 │     ├─ kinematics/
 │     │  ├─ ik/            # Métodos de cinemática inversa, URDF y utilidades de pallets.
-│     │  └─ ...
+│     │  └─ …
 │     ├─ tasks/             # Módulos auxiliares reutilizables (no ejecutables directamente).
-│     └─ utils/             # Helpers compartidos (paths.py, io_paths.py, etc.).
-├─ tasks/                   # Scripts ejecutables listos para terminal (python tasks/...).
+│     └─ utils/             # Helpers compartidos (`paths.py`, `io_paths.py`, etc.).
+├─ tasks/                   # Scripts ejecutables listos para terminal (`python tasks/...`).
 ├─ tests/                   # Pruebas automáticas (cuando apliquen).
 ├─ README.md                # Este tutorial.
 └─ LICENSE                  # Licencia del proyecto.
+```
 
 Puntos clave:
 - src contiene el paquete instalable aura_g1. Todo el código reutilizable vive ahí.
