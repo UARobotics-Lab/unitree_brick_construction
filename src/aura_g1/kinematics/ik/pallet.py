@@ -158,30 +158,35 @@ class Pallet:
                (y_min <= front <= y_max) and (y_min <= back <= y_max)
 
     def _create_grid(self):
+        """Crea las poses globales de cada ladrillo respetando el patrón deseado.
 
-        """
-        Crea una cuadrícula de posiciones para los ladrillos en el pallet.
-
+        El cálculo replica la lógica empleada en ``_create_grid_centers`` para que
+        ambas representaciones (centros precalculados y cuadrícula completa)
+        permanezcan coherentes.  Cuando el ``layout`` es ``"inclinado"`` las filas
+        impares se desplazan medio ladrillo en ``+X`` generando el patrón tipo
+        muro.
         """
 
         poses = []
-        for i in range(self.rows):
-            for j in range(self.cols):
-                for k in range(self.layers):
-                    x = j * self.brick_width #columnas en x
-                    y = i * self.brick_length # filas en y
-                    z = k * self.brick_height # todos los ladrillos están en el mismo plano
-
-                    #Pose local (respecto al pallet)
+        for row in range(self.rows):
+            offset_x = self._row_offset(row)
+            for col in range(self.cols):
+                for layer in range(self.layers):
+                    x = col * self.pitch_x + offset_x
+                    y = row * self.pitch_y
+                    z = layer * self.pitch_z
 
                     local_pose = SE3(x, y, z)
-
-                    # Pose global (respecto al mundo)
                     global_pose = self.base_pose * local_pose
 
                     poses.append(global_pose)
 
         return poses
+
+    def row_offset(self, row: int) -> float:
+        """Devuelve el desplazamiento aplicado en ``X`` para una fila concreta."""
+
+        return self._row_offset(row)
     
     def get_pose(self, row, col, layer, grasp: Optional[str] = None) -> SE3:
         """Devuelve la pose global del centro (o del ``grasp``) de un ladrillo."""

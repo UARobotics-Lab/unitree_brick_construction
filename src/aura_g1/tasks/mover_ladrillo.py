@@ -48,6 +48,29 @@ class MoverLadrillo:
             paso["mano_der"] = {int(k): float(v) for k, v in mano_der.items()}
         return paso
 
+    def _calcular_cintura_dinamica(self, origen: SE3, destino: SE3, base_yaw: float) -> float:
+        """Calcula un giro de cintura heurístico usando la separación XY de las poses."""
+
+        delta = destino.t[:2] - origen.t[:2]
+        distancia = np.linalg.norm(delta)
+        if distancia < 1e-6:
+            return float(base_yaw)
+
+        max_giro = 1.2  # radianes, evita rotaciones extremas
+        referencia = 0.45  # distancia a partir de la cual se aplica el giro máximo
+        escala = np.clip(distancia / referencia, 0.0, 1.0)
+
+        # Determinar el eje dominante para establecer el signo del giro
+        if abs(delta[0]) >= abs(delta[1]):
+            direccion = -np.sign(delta[0]) if delta[0] != 0 else 0.0
+        else:
+            direccion = np.sign(delta[1]) if delta[1] != 0 else 0.0
+
+        if direccion == 0.0:
+            return float(base_yaw)
+
+        return float(direccion * max_giro * escala)
+
     def mover(self, posiciones_origen, posiciones_destino, cintura_giro_rad=-1.57):
         """Genera una rutina para trasladar varios ladrillos de un pallet a otro."""
 
@@ -76,15 +99,19 @@ class MoverLadrillo:
             T_arriba_origen = pose_origen * SE3(0, 0, self.altura_intermedia)
             T_arriba_destino = pose_destino * SE3(0, 0, self.altura_intermedia)
 
+            cintura_dinamica = self._calcular_cintura_dinamica(
+                T_arriba_origen, T_arriba_destino, cintura_giro_rad
+            )
+
             # Secuencia de movimientos para un ladrillo
             pasos = [
                 (T_arriba_origen, 1.57),  # Ir encima del ladrillo
                 (pose_origen, 1.57),       # Bajar a tomar el ladrillo
                 (T_arriba_origen, 1.57),   # Subir el ladrillo
-                (T_arriba_origen, 0.0),    # Giro de cintura para trasladar
-                (T_arriba_destino, 0.0),   # Posición elevada sobre destino
-                (pose_destino, 0.0),       # Bajar para dejar el ladrillo
-                (T_arriba_destino, 0.0),   # Subir sin el ladrillo
+                (T_arriba_origen, cintura_dinamica),    # Giro de cintura para trasladar
+                (T_arriba_destino, cintura_dinamica),   # Posición elevada sobre destino
+                (pose_destino, cintura_dinamica),       # Bajar para dejar el ladrillo
+                (T_arriba_destino, cintura_dinamica),   # Subir sin el ladrillo
             ]
 
             for idx, (pose, cintura_rad) in enumerate(pasos, start=1):
