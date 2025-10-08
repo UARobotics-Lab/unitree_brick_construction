@@ -31,6 +31,7 @@ from roboticstoolbox.robot.ETS import ETS  # noqa: E402
 # ---------------------------------------------------------------------------
 
 ensure_data_dirs()
+console = Console()
 
 # ---------------------------------------------------------------------------
 # Carga del robot Aura y configuración del solver
@@ -87,6 +88,20 @@ pallet2_pose = SE3(0.1, 0.15, z) * SE3(orientacion)
 pallet1 = Pallet(rows=1, cols=3, layers=3, brick=brick, base_pose=pallet1_pose, layout=layout_mode)
 pallet2 = Pallet(rows=1, cols=3, layers=3, brick=brick, base_pose=pallet2_pose, layout=layout_mode)
 
+
+def mostrar_desfases(pallet: Pallet, nombre: str) -> None:
+    console.rule(f"[bold cyan] Desfase por fila en {nombre} [/bold cyan]")
+    for row in range(pallet.rows):
+        offset = pallet.row_offset(row)
+        console.print(
+            f"Fila {row}: Δx = {offset:.3f} m (ancho/2 = {pallet.brick.width / 2:.3f} m)"
+        )
+    console.print("")
+
+
+mostrar_desfases(pallet1, "Pallet 1")
+mostrar_desfases(pallet2, "Pallet 2")
+
 solver = LM_Chan(ilimit=40, slimit=30, tol_min=1e-6, tol_max=1e-3)
 np.random.seed(42)
 q0 = np.tile(robot.qr, (solver.slimit, 1)) + np.random.uniform(-0.3, 0.3, (solver.slimit, robot.n))
@@ -94,11 +109,18 @@ q0 = np.tile(robot.qr, (solver.slimit, 1)) + np.random.uniform(-0.3, 0.3, (solve
 mover = MoverLadrillo(robot=robot, solver=solver, ets=ets, pallet1=pallet1, pallet2=pallet2)
 posiciones_origen = [(0, 0, 0), (0, 1, 0)]
 posiciones_destino = [(0, 0, 1), (0, 1, 1)]
-rutina = mover.mover(posiciones_origen, posiciones_destino, cintura_giro_rad=np.deg2rad(90))
+
+delta_pallets = pallet2.base_pose.t[:2] - pallet1.base_pose.t[:2]
+cintura_base = np.clip(np.arctan2(delta_pallets[1], delta_pallets[0]), -1.2, 1.2)
+console.print(
+    f"Ángulo base de cintura (Pallet1 → Pallet2): {cintura_base:.3f} rad | ΔXY = {np.round(delta_pallets, 4)}"
+)
+
+rutina = mover.mover(posiciones_origen, posiciones_destino, cintura_giro_rad=cintura_base)
 
 cintura_por_pallet = {
     "Pallet 1": 0.0,
-    "Pallet 2": -1.57,
+    "Pallet 2": cintura_base if np.abs(cintura_base) > 1e-6 else -1.57,
 }
 
 json_path = path_results("rutina_ladrillo_prueba.json")
@@ -110,7 +132,6 @@ print(f"Rutina de movimiento guardada en: {json_path}")
 # Evaluación de IK en todos los ladrillos
 # ---------------------------------------------------------------------------
 
-console = Console()
 table = Table(title="Resultados de IK", show_lines=True)
 
 for column in ("Pallet", "Fila", "Columna", "Layer", "Cintura (rad)", "Estado", "Iteraciones", "Error", "q solución"):
