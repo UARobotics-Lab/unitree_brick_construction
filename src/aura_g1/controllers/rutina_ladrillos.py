@@ -5,6 +5,7 @@ import numpy as np
 import csv
 import pandas as pd
 import json
+import os 
 
 from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, ChannelFactoryInitialize
 from unitree_sdk2py.idl.unitree_hg.msg.dds_ import HandCmd_, HandState_, LowCmd_, LowState_
@@ -12,6 +13,7 @@ from unitree_sdk2py.idl.default import unitree_hg_msg_dds__HandCmd_, unitree_hg_
 from unitree_sdk2py.utils.crc import CRC
 from unitree_sdk2py.utils.thread import RecurrentThread
 from aura_g1.utils.io_paths import ensure_data_dirs, path_results
+
 
 ruta="release_arm_sdk.txt"
 #archivo_csv = "q_steps_pallet_LM.csv"
@@ -124,6 +126,13 @@ class ArmSequence:
         self.first_update = False
         self.target_pos = {}
         self.q_init_override = None
+        self.qref_last = {}      # {joint: ultima_qref_enviada}
+        self.qref_last = {}      # {joint: ultima_qref_enviada}
+        self._log_enabled = False
+        self._log_rows = []
+        self._log_t0 = None
+
+
 
         self.arm_joints = [
             G1JointIndex.LeftShoulderPitch, G1JointIndex.LeftShoulderRoll,
@@ -143,6 +152,7 @@ class ArmSequence:
         self.publisher.Init()
         self.subscriber = ChannelSubscriber("rt/lowstate", LowState_)
         self.subscriber.Init(self.LowStateHandler, 10)
+        
 
     def Start(self):
         self.thread = RecurrentThread(interval=self.control_dt, target=self.LowCmdWrite, name="arm_control")
@@ -191,6 +201,29 @@ class ArmSequence:
             self.low_cmd.motor_cmd[joint].tau = 0.0
             self.low_cmd.motor_cmd[joint].kp = self.kp
             self.low_cmd.motor_cmd[joint].kd = self.kd
+            # Guarda la referencia que se envía
+            self.qref_last[joint] = pos
+
+            # --- LOG opcional ---
+            try:
+                q_meas = self.low_state.motor_state[joint].q
+            except:
+                q_meas = q_init
+            try:
+                dq_meas = self.low_state.motor_state[joint].dq
+            except:
+                dq_meas = 0.0
+
+            i_or_tau = 0.0
+            for cand in ("tauEst", "tau", "i", "iq"):
+                try:
+                    i_or_tau = getattr(self.low_state.motor_state[joint], cand)
+                    break
+                except:
+                    pass
+
+            self._append_log_row(joint, q_meas, pos, dq_meas, i_or_tau)
+
 
         self.low_cmd.crc = self.crc.Crc(self.low_cmd)
         self.publisher.Write(self.low_cmd)
@@ -222,6 +255,35 @@ class ArmSequence:
         self.low_cmd.motor_cmd[G1JointIndex.kNotUsedJoint].q = 0
         self.low_cmd.crc = self.crc.Crc(self.low_cmd)
         self.publisher.Write(self.low_cmd)
+
+    # === NUEVOS MÉTODOS PARA TUNING Y LOG ===
+
+    def set_gains(self, kp: float, kd: float):
+        """Override rápido de ganancias PD (para tuning)."""
+        self.kp = float(kp)
+        self.kd = float(kd)
+
+    def log_start(self):
+        self._log_enabled = True
+        self._log_rows = []
+        self._log_t0 = time.time()
+
+    def log_stop_and_save(self, path_csv: str):
+        self._log_enabled = False
+        import os, csv
+        os.makedirs(os.path.dirname(path_csv), exist_ok=True)
+        with open(path_csv, "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["t_s", "joint", "q", "qref", "dq", "i_or_tau"])
+            w.writerows(self._log_rows)
+        self._log_rows = []
+        self._log_t0 = None
+
+    def _append_log_row(self, joint, q, qref, dq, i_or_tau):
+        if not self._log_enabled or self._log_t0 is None:
+            return
+        t_s = time.time() - self._log_t0
+        self._log_rows.append([t_s, joint, q, qref, dq, i_or_tau])
 
 
 # === Bloque principal ===
