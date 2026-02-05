@@ -12,6 +12,12 @@ from unitree_sdk2py.idl.unitree_hg.msg.dds_ import HandCmd_, HandState_, LowCmd_
 from unitree_sdk2py.idl.default import unitree_hg_msg_dds__HandCmd_, unitree_hg_msg_dds__LowCmd_
 from unitree_sdk2py.utils.crc import CRC
 from unitree_sdk2py.utils.thread import RecurrentThread
+
+import sys, pathlib
+ROOT = pathlib.Path(__file__).resolve().parents[2]  # .../src
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from aura_g1.utils.io_paths import ensure_data_dirs, path_results
 
 
